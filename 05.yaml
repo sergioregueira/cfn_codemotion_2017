@@ -1,0 +1,91 @@
+# 05.yaml - Cloudformation Tutorial - Ticketea training material
+#
+# Template topics:
+# - Conditionals
+# - Nested function calls
+# - List parameters
+# - Deletion Policy
+#
+# Left for exercise:
+# - Create two EC2 instances that depend on whether we're deploying in sandbox or staging
+#
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Redis cluster with conditionals (sandbox/staging/prod)
+
+Parameters:
+  DeploymentEnvironment:
+      Default: sandbox
+      Description: The environment this stack is being deployed to.
+      Type: String
+      AllowedValues: [sandbox, staging, production]
+  SubnetIDs:
+      Description: Where to place our redis nodes
+      Type: List<AWS::EC2::Subnet::Id>
+
+Conditions:
+    InSandbox: !Equals
+        - !Ref DeploymentEnvironment
+        - sandbox
+    InStagingOrProd: !Or
+        - !Equals
+            - !Ref DeploymentEnvironment
+            - production
+        - !Equals
+            - !Ref DeploymentEnvironment
+            - staging
+
+
+Resources:
+    RedisSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Empty SG
+
+    ApuRedisSubnetGroup:
+        Type: "AWS::ElastiCache::SubnetGroup"
+        Properties:
+            Description: "Where to place redis nodes"
+            SubnetIds: !Ref SubnetIDs
+
+    # For sandbox, let's create a simple 1-node redis instead of a cluster
+    SimpleRedis:
+        Condition: InSandbox
+        Type: AWS::ElastiCache::CacheCluster
+        Properties:
+            Engine: redis
+            EngineVersion: 3.2.10
+            NumCacheNodes: 1
+            CacheNodeType: cache.t2.micro
+            # In the case of a Simple 1-node redis, it'll pick one subnet in the subnet group
+            CacheSubnetGroupName: !Ref ApuRedisSubnetGroup
+            VpcSecurityGroupIds:
+                - # this is a list...
+                  Fn::GetAtt:
+                    - RedisSecurityGroup
+                    - GroupId
+
+    # For staging and production, let's create a beefier multi-az cluster
+    SeriousRedis:
+        Condition: InStagingOrProd
+        Type: AWS::ElastiCache::ReplicationGroup
+        # Deletion policy configured so that we never delete a cluster in staging or prod!
+        # Make sure to delete it by hand if that's necessary
+        DeletionPolicy: Retain
+        Properties:
+            ReplicationGroupDescription: "APU Redis Replication Group"
+            AutoMinorVersionUpgrade: true
+            AutomaticFailoverEnabled: true
+            PreferredMaintenanceWindow: "wed:05:00-wed:06:00"
+            SnapshotRetentionLimit: "6"
+            SnapshotWindow: "03:00-04:00"
+            Engine: redis
+            NumCacheClusters: 2
+            CacheNodeType: cache.m3.medium
+            CacheSubnetGroupName: !Ref ApuRedisSubnetGroup
+            EngineVersion: 3.2.10
+            SecurityGroupIds:
+                - # this is a list...
+                  Fn::GetAtt:
+                    - RedisSecurityGroup
+                    - GroupId

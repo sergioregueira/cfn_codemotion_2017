@@ -1,0 +1,78 @@
+# 06.yaml - Cloudformation Tutorial - Ticketea training material
+#
+# Template topics:
+# - Cross-stack references (mention !Sub ${AWS::StackName}-Instance1Address)
+#
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Cross-stack references
+
+Parameters:
+    SSHKey:
+        Description: The SSH Key that will be used to connect to our instance
+        Type: AWS::EC2::KeyPair::KeyName  # see http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/parameters-section-structure.html
+    AllowConnectionFrom:
+        Description: Allow ssh connection from this specific CIDR range (eg. 1.2.3.4/32)
+        Type: String
+        AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})' # eg. 1.1.1.1/32
+        ConstraintDescription: Must be a valid CIDR
+    VPC:
+        Description: VPC to launch resources in # needed a limitation in self-referencing security groups ingress rules
+        Type: AWS::EC2::VPC::Id
+
+Mappings:
+  RegionMap:
+    eu-west-1:  # Ireland
+      Ubuntu: ami-add175d4  # ubuntu 16.04
+    eu-central-1:  # Frankfurt
+      Ubuntu: ami-97e953f8  # ubuntu 16.04
+
+Resources:
+    MySecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: SG rules to apply in this example group
+            VpcId: !Ref VPC
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 22
+                  ToPort: 22
+                  CidrIp: !Ref AllowConnectionFrom
+
+    MySecurityGroupSelfIngress:
+        Type: AWS::EC2::SecurityGroupIngress
+        Properties:
+            IpProtocol: -1 # all types and all ports
+            SourceSecurityGroupId: !Ref MySecurityGroup
+            GroupId: !Ref MySecurityGroup
+
+    MyInstance:
+        Type: AWS::EC2::Instance
+        Properties:
+            KeyName: !Ref SSHKey
+            InstanceType: t2.micro
+            ImageId:
+              !FindInMap
+              - RegionMap
+              - !Ref AWS::Region
+              - Ubuntu
+            SecurityGroupIds: [!Ref MySecurityGroup]
+
+Outputs:
+    MyInstancePublicIp:
+        Description: Public IP of our EC2 machine
+        Value: !GetAtt MyInstance.PublicIp
+        Export:
+            Name: tutorial-MyInstancePublicIp
+
+    MyInstancePrivateIp:
+        Description: Private IP of our EC2 machine
+        Value: !GetAtt MyInstance.PrivateIp
+        Export:
+            Name: tutorial-MyInstancePrivateIp
+
+    MySecurityGroup:
+        Description: My Security GroupId
+        Value: !GetAtt MySecurityGroup.GroupId
+        Export:
+            Name: tutorial-MySecurityGroup

@@ -1,0 +1,60 @@
+# 07.yaml - Cloudformation Tutorial - Ticketea training material
+#
+# Template topics:
+# - Cross-stack references
+# - cfn-init
+# - ssh-add .ssh/tutorial.pem; ssh -A -i .ssh/tutorial.pem ubuntu@18.195.57.1
+#
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Cross-stack references
+
+Parameters:
+    SSHKey:
+        Description: The SSH Key that will be used to connect to our instance
+        Type: AWS::EC2::KeyPair::KeyName  # see http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/parameters-section-structure.html
+
+Mappings:
+  RegionMap:
+    eu-west-1:  # Ireland
+      Ubuntu: ami-add175d4  # ubuntu 16.04
+    eu-central-1:  # Frankfurt
+      Ubuntu: ami-97e953f8  # ubuntu 16.04
+
+Resources:
+    MyInstance:
+        Type: AWS::EC2::Instance
+        Metadata:
+            AWS::CloudFormation::Init:  # see http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
+                config:
+                  packages:
+                    apt:
+                      htop: []
+                      nmap: []
+                  commands:
+                    export_myvar:
+                      command: "echo OTHERINSTANCE=\"$OTHERINSTANCE\" >> /etc/environment"
+                      env:
+                        OTHERINSTANCE: !ImportValue tutorial-MyInstancePrivateIp
+        Properties:
+            KeyName: !Ref SSHKey
+            InstanceType: t2.micro
+            ImageId:
+              !FindInMap  # like FindInMap("RegionMap", Ref("aws:region"), "WebserverAMI")
+              - RegionMap
+              - !Ref AWS::Region
+              - Ubuntu
+            SecurityGroupIds: [!ImportValue tutorial-MySecurityGroup]
+            UserData:
+            UserData:
+                Fn::Base64: !Sub |
+                  #!/bin/bash -e
+                  apt-get update
+                  apt-get -y install python-pip
+                  pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+                  /usr/local/bin/cfn-init --region=${AWS::Region} --stack=${AWS::StackName} --resource=MyInstance
+
+Outputs:
+    MyInstancePublicIp:
+        Description: Public IP of our EC2 machine
+        Value: !GetAtt MyInstance.PublicIp
