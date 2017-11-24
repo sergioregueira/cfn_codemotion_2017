@@ -82,6 +82,7 @@ Resources:
         Type: AWS::ElasticLoadBalancing::LoadBalancer
         Properties:
             AvailabilityZones: [eu-central-1a, eu-central-1b]
+            CrossZone: true
             Instances:
                 - !Ref MyInstance1
                 - !Ref MyInstance2

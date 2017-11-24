@@ -110,6 +110,7 @@ Resources:
         Type: AWS::ElasticLoadBalancing::LoadBalancer
         Properties:
             AvailabilityZones: [!Ref AZ1, !Ref AZ2]
+            CrossZone: true
             Instances:
                 - !Ref MyInstance1
                 - !Ref MyInstance2
