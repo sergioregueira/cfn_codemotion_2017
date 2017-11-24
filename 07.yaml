@@ -46,7 +46,6 @@ Resources:
               - Ubuntu
             SecurityGroupIds: [!ImportValue tutorial-MySecurityGroup]
             UserData:
-            UserData:
                 Fn::Base64: !Sub |
                   #!/bin/bash -e
                   apt-get update
